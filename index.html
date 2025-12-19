@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Our Private Universe</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        :root {
+            --panel-bg: rgba(15, 15, 25, 0.9);
+            --accent: #4fc3f7;
+            --danger: #ff5252;
+        }
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Inter', system-ui, sans-serif; color: white; }
+        canvas { display: block; }
+        
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            transition: opacity 0.5s;
+        }
+
+        #sidebar {
+            position: absolute;
+            right: -250px;
+            top: 0;
+            bottom: 0;
+            width: 220px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(15px);
+            border-left: 1px solid rgba(255,255,255,0.1);
+            padding: 20px;
+            transition: right 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 100;
+        }
+        #sidebar.active { right: 0; }
+        #sidebar.drop-zone-active { background: rgba(255, 82, 82, 0.3); border-left: 3px solid var(--danger); }
+
+        .item-card {
+            background: rgba(255,255,255,0.05);
+            padding: 12px;
+            border-radius: 12px;
+            text-align: center;
+            cursor: grab;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+            user-select: none;
+            font-size: 2.2rem;
+        }
+        .item-card:hover { background: rgba(255,255,255,0.1); border-color: var(--accent); }
+        .item-card:active { cursor: grabbing; transform: scale(0.95); }
+        .item-label { font-size: 0.75rem; display: block; margin-top: 5px; color: #aaa; }
+
+        #back-btn {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 28px;
+            background: var(--panel-bg);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 30px;
+            cursor: pointer;
+            display: none;
+            backdrop-filter: blur(5px);
+            z-index: 101;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        #back-btn:hover { background: white; color: black; border-color: white; }
+
+        .planet-label {
+            position: absolute;
+            padding: 8px 16px;
+            background: rgba(0,0,0,0.85);
+            border-radius: 8px;
+            pointer-events: none;
+            display: none;
+            transform: translate(-50%, -120%);
+            border: 1px solid var(--accent);
+            white-space: nowrap;
+        }
+        
+        #drag-proxy {
+            position: fixed;
+            pointer-events: none;
+            display: none;
+            font-size: 3.5rem;
+            z-index: 1000;
+            transform: translate(-50%, -50%);
+            filter: drop-shadow(0 0 10px rgba(255,255,255,0.5));
+        }
+
+        /* Birthday Celebration Styles */
+        #birthday-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .birthday-text {
+            font-size: 5rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 10px;
+            color: #fff;
+            text-shadow: 0 0 20px rgba(79, 195, 247, 0.8), 0 0 40px rgba(79, 195, 247, 0.4);
+            opacity: 0;
+            transform: scale(0.5);
+            text-align: center;
+        }
+
+        .ribbon {
+            position: absolute;
+            width: 10px;
+            height: 20px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <h1 style="margin:0; font-weight: 300; letter-spacing: 3px;">OUR UNIVERSE</h1>
+        <p style="opacity: 0.6;">Select a world to customize</p>
+    </div>
+
+    <div id="sidebar">
+        <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">Ecosystem</h3>
+        <div class="item-card" draggable="true" data-emoji="🌸" data-type="flower">🌸<span class="item-label">Sakura</span></div>
+        <div class="item-card" draggable="true" data-emoji="🌲" data-type="tree">🌲<span class="item-label">Pine</span></div>
+        <div class="item-card" draggable="true" data-emoji="🦋" data-type="animal">🦋<span class="item-label">Butterfly</span></div>
+        <div class="item-card" draggable="true" data-emoji="🦊" data-type="animal">🦊<span class="item-label">Fox</span></div>
+        <div class="item-card" draggable="true" data-emoji="💩" data-type="obj">💩<span class="item-label">Poo</span></div>
+        <div class="item-card" draggable="true" data-emoji="🎂" data-type="cake">🎂<span class="item-label">Cake</span></div>
+        <div class="item-card" draggable="true" data-emoji="❤️" data-type="obj">❤️<span class="item-label">Heart</span></div>
+        <p id="hint-text" style="font-size: 0.7rem; opacity: 0.5; text-align: center; margin-top: auto;">Drag items to world or back here to remove</p>
+    </div>
+
+    <div id="drag-proxy"></div>
+    <div id="planet-label" class="planet-label"></div>
+    <button id="back-btn">RETURN TO GALAXY</button>
+    
+    <div id="birthday-overlay"></div>
+
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+          }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        const PLANETS_CONFIG = [
+            { id: 'gfc', name: "GFC Prime", color: 0x2ecc71, pos: [-12, 2, 0], size: 4, ready: true },
+            { id: 'hzh', name: "HZH Station", color: 0xf1c40f, pos: [12, -2, -5], size: 5, ready: true },
+            { id: 'tbc', name: "To Be Continued...", color: 0x333333, pos: [0, -10, -15], size: 3, ready: false }
+        ];
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        sunLight.position.set(15, 15, 15);
+        scene.add(sunLight);
+
+        const starGeo = new THREE.BufferGeometry();
+        const starPos = [];
+        for(let i=0; i<8000; i++) starPos.push((Math.random()-0.5)*250, (Math.random()-0.5)*250, (Math.random()-0.5)*250);
+        starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+        const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0xffffff, size: 0.15}));
+        scene.add(stars);
+
+        const planetMeshes = [];
+        const universeContainer = new THREE.Group();
+        scene.add(universeContainer);
+
+        PLANETS_CONFIG.forEach(cfg => {
+            const mesh = new THREE.Mesh(
+                new THREE.SphereGeometry(cfg.size, 64, 64),
+                new THREE.MeshStandardMaterial({ color: cfg.color, roughness: 0.7, metalness: 0.2 })
+            );
+            mesh.position.set(...cfg.pos);
+            mesh.userData = { ...cfg };
+            universeContainer.add(mesh);
+            planetMeshes.push(mesh);
+        });
+
+        camera.position.z = 40;
+
+        let activePlanet = null;
+        let isZoomed = false;
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        const label = document.getElementById('planet-label');
+        const sidebar = document.getElementById('sidebar');
+        const backBtn = document.getElementById('back-btn');
+        const dragProxy = document.getElementById('drag-proxy');
+        const bdayOverlay = document.getElementById('birthday-overlay');
+
+        let screenX = 0, screenY = 0;
+        let draggedItem = null;
+
+        window.addEventListener('mousemove', (e) => {
+            screenX = e.clientX;
+            screenY = e.clientY;
+            mouse.x = (screenX / window.innerWidth) * 2 - 1;
+            mouse.y = -(screenY / window.innerHeight) * 2 + 1;
+
+            if (!isZoomed) {
+                raycaster.setFromCamera(mouse, camera);
+                const hits = raycaster.intersectObjects(planetMeshes);
+                if (hits.length > 0) {
+                    label.style.display = 'block';
+                    label.style.left = screenX + 'px';
+                    label.style.top = screenY + 'px';
+                    label.innerText = hits[0].object.userData.name;
+                    document.body.style.cursor = 'pointer';
+                } else {
+                    label.style.display = 'none';
+                    document.body.style.cursor = 'default';
+                }
+            } else {
+                raycaster.setFromCamera(mouse, camera);
+                const spriteHits = raycaster.intersectObjects(activePlanet.children);
+                const spriteHit = spriteHits.find(h => h.object instanceof THREE.Sprite);
+                document.body.style.cursor = spriteHit ? 'move' : 'default';
+
+                if (dragProxy.style.display === 'block') {
+                    dragProxy.style.left = screenX + 'px';
+                    dragProxy.style.top = screenY + 'px';
+                }
+            }
+        });
+
+        window.addEventListener('mousedown', (e) => {
+            if (!isZoomed || !activePlanet) return;
+            raycaster.setFromCamera(mouse, camera);
+            const spriteHits = raycaster.intersectObjects(activePlanet.children);
+            const spriteHit = spriteHits.find(h => h.object instanceof THREE.Sprite);
+            if (spriteHit) {
+                const sprite = spriteHit.object;
+                draggedItem = { emoji: sprite.userData.emoji, existingSprite: sprite, type: sprite.userData.type };
+                dragProxy.innerText = sprite.userData.emoji;
+                dragProxy.style.display = 'block';
+                dragProxy.style.left = screenX + 'px';
+                dragProxy.style.top = screenY + 'px';
+                sprite.visible = false;
+            }
+        });
+
+        window.addEventListener('click', () => {
+            if (isZoomed) return;
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(planetMeshes);
+            if (hits.length > 0 && hits[0].object.userData.ready) zoomToPlanet(hits[0].object);
+        });
+
+        function zoomToPlanet(planet) {
+            isZoomed = true;
+            activePlanet = planet;
+            label.style.display = 'none';
+            const zoomDist = planet.userData.size * 2.8;
+            gsap.to(camera.position, {
+                x: planet.position.x, y: planet.position.y, z: planet.position.z + zoomDist,
+                duration: 1.5, ease: "expo.inOut", onUpdate: () => camera.lookAt(planet.position)
+            });
+            gsap.to("#hud", { opacity: 0, duration: 0.5 });
+            sidebar.classList.add('active');
+            backBtn.style.display = 'block';
+        }
+
+        backBtn.addEventListener('click', () => {
+            isZoomed = false; activePlanet = null;
+            sidebar.classList.remove('active');
+            backBtn.style.display = 'none';
+            gsap.to(camera.position, { x: 0, y: 0, z: 40, duration: 1.5, ease: "expo.inOut", onUpdate: () => camera.lookAt(0,0,0) });
+            gsap.to("#hud", { opacity: 1, duration: 0.5 });
+        });
+
+        document.querySelectorAll('.item-card').forEach(card => {
+            card.addEventListener('dragstart', (e) => {
+                draggedItem = { emoji: card.dataset.emoji, type: card.dataset.type };
+                dragProxy.innerText = draggedItem.emoji;
+                dragProxy.style.left = e.clientX + 'px';
+                dragProxy.style.top = e.clientY + 'px';
+                dragProxy.style.display = 'block';
+                const img = new Image();
+                img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+                e.dataTransfer.setDragImage(img, 0, 0);
+            });
+        });
+
+        window.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            screenX = e.clientX; screenY = e.clientY;
+            mouse.x = (screenX / window.innerWidth) * 2 - 1;
+            mouse.y = -(screenY / window.innerHeight) * 2 + 1;
+            if (dragProxy.style.display === 'block') {
+                dragProxy.style.left = screenX + 'px';
+                dragProxy.style.top = screenY + 'px';
+                if (screenX > window.innerWidth - 220) sidebar.classList.add('drop-zone-active');
+                else sidebar.classList.remove('drop-zone-active');
+            }
+        });
+
+        window.addEventListener('mouseup', handleDrop);
+        window.addEventListener('drop', handleDrop);
+
+        function handleDrop(e) {
+            if (!draggedItem) return;
+            sidebar.classList.remove('drop-zone-active');
+            dragProxy.style.display = 'none';
+            const isOverSidebar = e.clientX > window.innerWidth - 220;
+
+            if (isOverSidebar) {
+                if (draggedItem.existingSprite) activePlanet.remove(draggedItem.existingSprite);
+            } else {
+                raycaster.setFromCamera(mouse, camera);
+                const hits = raycaster.intersectObject(activePlanet);
+                if (hits.length > 0) {
+                    if (draggedItem.existingSprite) {
+                        updateSpritePos(draggedItem.existingSprite, hits[0]);
+                    } else {
+                        addLifeToPlanet(hits[0], draggedItem);
+                    }
+                    // Trigger Birthday Surprise!
+                    if (draggedItem.type === 'cake' && activePlanet.userData.id === 'gfc') {
+                        triggerBirthdaySurprise();
+                    }
+                } else if (draggedItem.existingSprite) {
+                    draggedItem.existingSprite.visible = true;
+                }
+            }
+            draggedItem = null;
+        }
+
+        function triggerBirthdaySurprise() {
+            // Text Animation
+            const text = document.createElement('div');
+            text.className = 'birthday-text';
+            text.innerHTML = 'HAPPY BIRTHDAY<br>GFC';
+            bdayOverlay.appendChild(text);
+
+            gsap.to(text, { opacity: 1, scale: 1, duration: 1.2, ease: "back.out(1.7)" });
+            gsap.to(text, { opacity: 0, scale: 1.5, delay: 3, duration: 1, onComplete: () => text.remove() });
+
+            // Ribbon/Confetti Rain
+            const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722'];
+            
+            for (let i = 0; i < 150; i++) {
+                const ribbon = document.createElement('div');
+                ribbon.className = 'ribbon';
+                ribbon.style.left = Math.random() * 100 + 'vw';
+                ribbon.style.top = -20 + 'px';
+                ribbon.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                ribbon.style.transform = `rotate(${Math.random() * 360}deg)`;
+                bdayOverlay.appendChild(ribbon);
+
+                gsap.to(ribbon, {
+                    y: window.innerHeight + 100,
+                    x: (Math.random() - 0.5) * 200,
+                    rotation: Math.random() * 1000,
+                    duration: 2 + Math.random() * 3,
+                    ease: "power1.out",
+                    onComplete: () => ribbon.remove()
+                });
+            }
+        }
+
+        function updateSpritePos(sprite, hit) {
+            sprite.visible = true;
+            activePlanet.updateMatrixWorld();
+            const localPoint = activePlanet.worldToLocal(hit.point.clone());
+            sprite.position.copy(localPoint);
+            const offsetDir = localPoint.clone().normalize();
+            sprite.position.add(offsetDir.multiplyScalar(0.3));
+            gsap.killTweensOf(sprite.position);
+            gsap.to(sprite.position, {
+                x: `+=${offsetDir.x * 0.1}`, y: `+=${offsetDir.y * 0.1}`, z: `+=${offsetDir.z * 0.1}`,
+                duration: 1.5, repeat: -1, yoyo: true, ease: "sine.inOut"
+            });
+        }
+
+        function addLifeToPlanet(hit, data) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.font = '160px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(data.emoji, 128, 128);
+            const texture = new THREE.CanvasTexture(canvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+            sprite.renderOrder = 1000;
+            sprite.userData.emoji = data.emoji;
+            sprite.userData.type = data.type;
+            activePlanet.updateMatrixWorld();
+            const localPoint = activePlanet.worldToLocal(hit.point.clone());
+            sprite.position.copy(localPoint);
+            const offsetDir = localPoint.clone().normalize();
+            sprite.position.add(offsetDir.multiplyScalar(0.3));
+            sprite.scale.set(0.01, 0.01, 0.01);
+            activePlanet.add(sprite);
+            gsap.to(sprite.scale, { x: 2, y: 2, z: 2, duration: 0.5, ease: "back.out(2)" });
+            gsap.to(sprite.position, {
+                x: `+=${offsetDir.x * 0.1}`, y: `+=${offsetDir.y * 0.1}`, z: `+=${offsetDir.z * 0.1}`,
+                duration: 1.5, repeat: -1, yoyo: true, ease: "sine.inOut"
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!isZoomed) {
+                planetMeshes.forEach(p => p.rotation.y += 0.005);
+                stars.rotation.y += 0.0001;
+            }
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
